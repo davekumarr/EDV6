@@ -10,14 +10,26 @@ import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
 function App() {
+  const isAuthenticated = localStorage.getItem('token');
+
   return (
     <Router>
       <div className="App">
         <Navbar />
         <div className="container-fluid">
           <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            <Route 
+              path="/login" 
+              element={
+                isAuthenticated ? <Navigate to="/dashboard" replace /> : <Login />
+              } 
+            />
+            <Route 
+              path="/register" 
+              element={
+                isAuthenticated ? <Navigate to="/dashboard" replace /> : <Register />
+              } 
+            />
             <Route
               path="/dashboard"
               element={
@@ -42,7 +54,18 @@ function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/" element={<Navigate to="/dashboard" />} />
+            <Route 
+              path="/" 
+              element={
+                isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
+              } 
+            />
+            <Route 
+              path="*" 
+              element={
+                isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />
+              } 
+            />
           </Routes>
         </div>
       </div>

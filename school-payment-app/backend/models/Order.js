@@ -5,6 +5,10 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  school_name: {
+    type: String,
+    required: true
+  },
   trustee_id: {
     type: String
   },
@@ -33,6 +37,11 @@ const orderSchema = new mongoose.Schema({
   amount: {
     type: Number,
     required: true
+  },
+  preferred_payment_mode: {
+    type: String,
+    enum: ['upi', 'netbanking', 'card', 'wallet', 'any'],
+    default: 'any'
   },
   status: {
     type: String,
