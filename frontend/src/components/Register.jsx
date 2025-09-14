@@ -11,6 +11,7 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -31,6 +32,12 @@ const Register = () => {
       return;
     }
 
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      setLoading(false);
+      return;
+    }
+
     try {
       await axios.post(
         `${import.meta.env.VITE_API_URL}/api/auth/register`,
@@ -41,7 +48,10 @@ const Register = () => {
         }
       );
       
-      navigate('/login');
+      setSuccess(true);
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
     } catch (err) {
       setError(err.response?.data?.error || 'Registration failed. Please try again.');
     } finally {
@@ -49,27 +59,51 @@ const Register = () => {
     }
   };
 
+  if (success) {
+    return (
+      <div className="container">
+        <div className="row justify-content-center mt-5">
+          <div className="col-md-6 col-lg-5">
+            <div className="card">
+              <div className="card-body p-5 text-center">
+                <div style={{ fontSize: '4rem' }}>🎉</div>
+                <h3 style={{ color: 'var(--primary-green)' }}>Registration Successful!</h3>
+                <p className="text-muted mb-4">
+                  Your account has been created successfully. 
+                  Redirecting to login page...
+                </p>
+                <div className="spinner-border" style={{ color: 'var(--primary-green)' }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <div className="row justify-content-center mt-5">
         <div className="col-md-6 col-lg-5">
           <div className="card">
             <div className="card-body p-5">
-              <h2 className="text-center mb-4" style={{ color: 'var(--primary-blue)' }}>
-                School Payment Portal
-              </h2>
-              <h4 className="text-center mb-4">Register</h4>
+              <div className="text-center mb-4">
+                <h2 style={{ color: 'var(--primary-blue)' }}>
+                  🏫 School Payment Portal
+                </h2>
+                <p className="text-muted">Create your account</p>
+              </div>
               
               {error && (
                 <div className="alert alert-danger" role="alert">
-                  {error}
+                  ❌ {error}
                 </div>
               )}
 
               <form onSubmit={handleSubmit}>
                 <div className="mb-3">
                   <label htmlFor="name" className="form-label">
-                    Full Name
+                    <strong>👤 Full Name</strong>
                   </label>
                   <input
                     type="text"
@@ -85,7 +119,7 @@ const Register = () => {
 
                 <div className="mb-3">
                   <label htmlFor="email" className="form-label">
-                    Email Address
+                    <strong>📧 Email Address</strong>
                   </label>
                   <input
                     type="email"
@@ -101,7 +135,7 @@ const Register = () => {
 
                 <div className="mb-3">
                   <label htmlFor="password" className="form-label">
-                    Password
+                    <strong>🔒 Password</strong>
                   </label>
                   <input
                     type="password"
@@ -118,7 +152,7 @@ const Register = () => {
 
                 <div className="mb-4">
                   <label htmlFor="confirmPassword" className="form-label">
-                    Confirm Password
+                    <strong>🔒 Confirm Password</strong>
                   </label>
                   <input
                     type="password"
@@ -140,10 +174,10 @@ const Register = () => {
                   {loading ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-2" />
-                      Registering...
+                      Creating Account...
                     </>
                   ) : (
-                    'Register'
+                    '✨ Create Account'
                   )}
                 </button>
 
@@ -151,7 +185,7 @@ const Register = () => {
                   <p className="mb-0">
                     Already have an account?{' '}
                     <Link to="/login" style={{ color: 'var(--primary-blue)' }}>
-                      Login here
+                      Sign in here
                     </Link>
                   </p>
                 </div>

@@ -2,12 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 
-const Register = () => {
+const Login = () => {
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
-    password: '',
-    confirmPassword: ''
+    password: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,25 +23,16 @@ const Register = () => {
     setLoading(true);
     setError('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
-      return;
-    }
-
     try {
-      await axios.post(
-        `${import.meta.env.VITE_API_URL}/api/auth/register`,
-        {
-          name: formData.name,
-          email: formData.email,
-          password: formData.password
-        }
+      const response = await axios.post(
+        `${import.meta.env.VITE_API_URL}/api/auth/login`,
+        formData
       );
       
-      navigate('/login');
+      localStorage.setItem('token', response.data.token);
+      navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed. Please try again.');
+      setError(err.response?.data?.error || 'Login failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -55,37 +44,23 @@ const Register = () => {
         <div className="col-md-6 col-lg-5">
           <div className="card">
             <div className="card-body p-5">
-              <h2 className="text-center mb-4" style={{ color: 'var(--primary-blue)' }}>
-                School Payment Portal
-              </h2>
-              <h4 className="text-center mb-4">Register</h4>
+              <div className="text-center mb-4">
+                <h2 style={{ color: 'var(--primary-blue)' }}>
+                  🏫 School Payment Portal
+                </h2>
+                <p className="text-muted">Sign in to your account</p>
+              </div>
               
               {error && (
                 <div className="alert alert-danger" role="alert">
-                  {error}
+                  ❌ {error}
                 </div>
               )}
 
               <form onSubmit={handleSubmit}>
                 <div className="mb-3">
-                  <label htmlFor="name" className="form-label">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    id="name"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    required
-                    placeholder="Enter your full name"
-                  />
-                </div>
-
-                <div className="mb-3">
                   <label htmlFor="email" className="form-label">
-                    Email Address
+                    <strong>📧 Email Address</strong>
                   </label>
                   <input
                     type="email"
@@ -99,9 +74,9 @@ const Register = () => {
                   />
                 </div>
 
-                <div className="mb-3">
+                <div className="mb-4">
                   <label htmlFor="password" className="form-label">
-                    Password
+                    <strong>🔒 Password</strong>
                   </label>
                   <input
                     type="password"
@@ -111,47 +86,30 @@ const Register = () => {
                     value={formData.password}
                     onChange={handleChange}
                     required
-                    minLength="6"
-                    placeholder="Enter password (min 6 characters)"
-                  />
-                </div>
-
-                <div className="mb-4">
-                  <label htmlFor="confirmPassword" className="form-label">
-                    Confirm Password
-                  </label>
-                  <input
-                    type="password"
-                    className="form-control"
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    required
-                    placeholder="Confirm your password"
+                    placeholder="Enter your password"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="btn btn-success w-100 mb-3"
+                  className="btn btn-primary w-100 mb-3"
                   disabled={loading}
                 >
                   {loading ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-2" />
-                      Registering...
+                      Signing in...
                     </>
                   ) : (
-                    'Register'
+                    '🚀 Sign In'
                   )}
                 </button>
 
                 <div className="text-center">
                   <p className="mb-0">
-                    Already have an account?{' '}
-                    <Link to="/login" style={{ color: 'var(--primary-blue)' }}>
-                      Login here
+                    Don't have an account?{' '}
+                    <Link to="/register" style={{ color: 'var(--primary-green)' }}>
+                      Create one here
                     </Link>
                   </p>
                 </div>
@@ -164,4 +122,4 @@ const Register = () => {
   );
 };
 
-export default Register;
+export default Login;
