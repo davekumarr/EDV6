@@ -6,22 +6,32 @@ function Register() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setSuccess('');
     try {
-      const res = await axios.post('/register', { name, email, password });
-      alert(res.data.message);
-      navigate('/login');
+      // Fixed: Added /api/auth prefix to match backend route
+      const res = await axios.post('/api/auth/register', { name, email, password });
+      setSuccess(res.data.message);
+      // Redirect to login after 2 seconds
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
     } catch (error) {
-      alert(error.response?.data?.error || 'Registration failed');
+      setError(error.response?.data?.error || 'Registration failed');
     }
   };
 
   return (
     <div className="container mt-5">
       <h2>Register</h2>
+      {error && <div className="alert alert-danger">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
       <form onSubmit={handleSubmit}>
         <div className="mb-3">
           <label className="form-label">Name</label>
@@ -52,7 +62,8 @@ function Register() {
             className="form-control"
             value={password}
             onChange={e => setPassword(e.target.value)}
-            placeholder="Enter password"
+            placeholder="Enter password (min 6 characters)"
+            minLength={6}
             required
           />
         </div>
