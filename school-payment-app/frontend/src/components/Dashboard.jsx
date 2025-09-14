@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from '../api/axios';
-import TestAPI from './TestAPI';
 
 const Dashboard = () => {
   const [transactions, setTransactions] = useState([]);
@@ -11,7 +10,7 @@ const Dashboard = () => {
     school_id: '',
     page: 1,
     limit: 10,
-    sort: 'payment_time',
+    sort: 'createdAt',
     order: 'desc'
   });
   const [pagination, setPagination] = useState({});
@@ -244,6 +243,7 @@ useEffect(() => {
               value={filters.sort}
               onChange={(e) => handleFilterChange('sort', e.target.value)}
             >
+              <option value="createdAt">Created Date</option>
               <option value="payment_time">Payment Time</option>
               <option value="order_amount">Order Amount</option>
               <option value="status">Status</option>
@@ -275,21 +275,20 @@ useEffect(() => {
           <table className="table">
             <thead>
               <tr>
-                <th>Transaction ID</th>
-                <th>School Name</th>
-                <th>Student</th>
-                <th>Gateway</th>
-                <th>Order Amount</th>
-                <th>Transaction Amount</th>
+                <th>Order ID</th>
+                <th>School Details</th>
+                <th>Student Details</th>
+                <th>Amount</th>
                 <th>Payment Mode</th>
                 <th>Status</th>
+                <th>Date Created</th>
                 <th>Payment Time</th>
               </tr>
             </thead>
             <tbody>
               {transactions.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="text-center py-4">
+                  <td colSpan="8" className="text-center py-4">
                     No transactions found
                   </td>
                 </tr>
@@ -297,46 +296,74 @@ useEffect(() => {
                 transactions.map((transaction) => (
                   <tr key={transaction.collect_id || transaction._id}>
                     <td>
-                      <small className="text-muted">
-                        {transaction.custom_order_id || 'N/A'}
-                      </small>
+                      <div>
+                        <strong>{transaction.custom_order_id || 'N/A'}</strong>
+                        <br />
+                        <small className="text-muted">
+                          Gateway: {transaction.gateway || 'Edviron'}
+                        </small>
+                      </div>
                     </td>
                     <td>
-                        <div>
-                            <strong>{transaction.school_name || 'N/A'}</strong>
-                            <br />
-                            <small className="text-muted">ID: {transaction.school_id}</small>
-                        </div>
+                      <div>
+                        <strong>{transaction.school_name || 'N/A'}</strong>
+                        <br />
+                        <small className="text-muted">
+                          ID: {transaction.school_id || 'N/A'}
+                        </small>
+                      </div>
                     </td>
                     <td>
                       <div>
                         <strong>{transaction.student_info?.name || 'N/A'}</strong>
                         <br />
                         <small className="text-muted">
+                          ID: {transaction.student_info?.id || 'N/A'}
+                        </small>
+                        <br />
+                        <small className="text-muted">
                           {transaction.student_info?.email || 'N/A'}
                         </small>
                       </div>
                     </td>
-                    <td>{transaction.gateway || 'N/A'}</td>
                     <td>
-                      <strong>{formatCurrency(transaction.order_amount || 0)}</strong>
+                      <div>
+                        <strong>{formatCurrency(transaction.order_amount || 0)}</strong>
+                        <br />
+                        {transaction.transaction_amount && transaction.transaction_amount !== transaction.order_amount && (
+                          <small className="text-muted">
+                            Paid: {formatCurrency(transaction.transaction_amount)}
+                          </small>
+                        )}
+                      </div>
                     </td>
                     <td>
-                      {transaction.transaction_amount 
-                        ? formatCurrency(transaction.transaction_amount)
-                        : 'N/A'
-                      }
+                      {transaction.payment_mode ? (
+                        <div>
+                          <span className="badge bg-info text-dark">
+                            {transaction.payment_mode.toUpperCase()}
+                          </span>
+                          <br />
+                          {transaction.bank_reference && (
+                            <small className="text-muted">
+                              Ref: {transaction.bank_reference}
+                            </small>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted">N/A</span>
+                      )}
                     </td>
                     <td>
                       <span className={`badge ${getStatusBadge(transaction.status)}`}>
-                        {transaction.status || 'pending'}
+                        {(transaction.status || 'pending').toUpperCase()}
                       </span>
                     </td>
                     <td>
-                      <small>{formatDate(transaction.payment_time)}</small>
+                      <small>{formatDate(transaction.createdAt)}</small>
                     </td>
                     <td>
-                      <small>{transaction.payment_mode || 'N/A'}</small>
+                      <small>{formatDate(transaction.payment_time)}</small>
                     </td>
                   </tr>
                 ))

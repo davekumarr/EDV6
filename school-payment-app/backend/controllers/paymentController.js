@@ -106,19 +106,55 @@ exports.createPayment = async (req, res) => {
       }
     );
 
-    console.log('Payment API Response:', paymentResponse.data);
+    console.log('Payment API Full Response:', JSON.stringify(paymentResponse.data, null, 2));
+
+    // Check if the response has the expected structure
+    if (!paymentResponse.data || !paymentResponse.data.collect_request_id) {
+      console.error('Invalid API response structure:', paymentResponse.data);
+      return res.status(500).json({ 
+        error: 'Invalid response from payment gateway',
+        details: paymentResponse.data 
+      });
+    }
 
     // Update order with collect_request_id
     order.custom_order_id = paymentResponse.data.collect_request_id;
     await order.save();
     console.log('Order updated with collect_request_id:', order.custom_order_id);
 
+    // Try different possible field names for the payment URL
+    let paymentUrl = null;
+    const possibleUrlFields = [
+      'Collect_request_url',
+      'collect_request_url', 
+      'payment_url',
+      'url',
+      'redirect_url',
+      'paymentUrl'
+    ];
+
+    for (const field of possibleUrlFields) {
+      if (paymentResponse.data[field]) {
+        paymentUrl = paymentResponse.data[field];
+        console.log(`Found payment URL in field '${field}':`, paymentUrl);
+        break;
+      }
+    }
+
+    if (!paymentUrl) {
+      console.error('No payment URL found in response:', paymentResponse.data);
+      return res.status(500).json({ 
+        error: 'Payment URL not found in gateway response',
+        details: paymentResponse.data 
+      });
+    }
+
     // Return success response
     const response = {
       success: true,
       order_id: order._id,
       custom_order_id: order.custom_order_id,
-      payment_url: paymentResponse.data.Collect_request_url,
+      payment_url: paymentUrl,
       amount: amount,
       school_name: school_name,
       preferred_payment_mode: preferred_payment_mode,
@@ -137,7 +173,8 @@ exports.createPayment = async (req, res) => {
     
     res.status(500).json({ 
       error: 'Failed to create payment',
-      details: error.response?.data || error.message 
+      details: error.response?.data || error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 };

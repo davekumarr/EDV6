@@ -14,6 +14,7 @@ const PaymentForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(null);
+  const [debugInfo, setDebugInfo] = useState(null);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -59,15 +60,21 @@ const PaymentForm = () => {
     e.preventDefault();
     setError('');
     setSuccess(null);
+    setDebugInfo(null);
 
     if (!validateForm()) return;
 
     setLoading(true);
     
     try {
+      console.log('Sending payment request with data:', formData);
+      
       const response = await axios.post('/api/payment/create-payment', formData);
       
-      if (response.data.success) {
+      console.log('Payment API Response:', response.data);
+      setDebugInfo(response.data); // Store for debugging
+      
+      if (response.data.success && response.data.payment_url) {
         setSuccess({
           order_id: response.data.custom_order_id,
           payment_url: response.data.payment_url,
@@ -86,9 +93,15 @@ const PaymentForm = () => {
           preferred_payment_mode: 'any',
           callback_url: 'http://localhost:5173/payment-success'
         });
+      } else {
+        throw new Error('Payment URL not generated. Check API response.');
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create payment. Please try again.');
+      console.error('Payment creation error:', err);
+      console.error('Error response:', err.response?.data);
+      
+      setError(err.response?.data?.error || err.message || 'Failed to create payment. Please try again.');
+      setDebugInfo(err.response?.data); // Store error details for debugging
     } finally {
       setLoading(false);
     }
@@ -96,8 +109,23 @@ const PaymentForm = () => {
 
   const handlePayment = () => {
     if (success?.payment_url) {
-      window.open(success.payment_url, '_blank');
+      console.log('Redirecting to payment URL:', success.payment_url);
+      // Try both window.open and window.location methods
+      const opened = window.open(success.payment_url, '_blank');
+      if (!opened) {
+        // If popup was blocked, try direct navigation
+        window.location.href = success.payment_url;
+      }
+    } else {
+      console.error('No payment URL available:', success);
+      setError('Payment URL not available. Please try creating payment again.');
     }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('Payment URL copied to clipboard!');
+    });
   };
 
   return (
@@ -114,7 +142,7 @@ const PaymentForm = () => {
 
               {error && (
                 <div className="alert alert-danger" role="alert">
-                  {error}
+                  <strong>Error:</strong> {error}
                 </div>
               )}
 
@@ -122,7 +150,7 @@ const PaymentForm = () => {
                 <div className="card mb-4" style={{ background: 'var(--light-green)', border: '1px solid var(--primary-green)' }}>
                   <div className="card-body">
                     <h5 style={{ color: 'var(--dark-green)' }}>
-                      Payment Link Created Successfully!
+                      ✅ Payment Link Created Successfully!
                     </h5>
                     <div className="mt-3">
                       <p className="mb-2">
@@ -134,16 +162,37 @@ const PaymentForm = () => {
                       <p className="mb-2">
                         <strong>Amount:</strong> ₹{success.amount}
                       </p>
-                      <p className="mb-3">
+                      <p className="mb-2">
                         <strong>Payment Mode:</strong> {success.preferred_payment_mode}
                       </p>
-                      <button 
-                        className="btn btn-success btn-lg"
-                        onClick={handlePayment}
-                      >
-                        Proceed to Payment
-                      </button>
+
+                      <div className="d-grid gap-2">
+                        <button 
+                          className="btn btn-success btn-lg"
+                          onClick={handlePayment}
+                        >
+                          🚀 Proceed to Payment
+                        </button>
+                        <button 
+                          className="btn btn-outline-success"
+                          onClick={() => copyToClipboard(success.payment_url)}
+                        >
+                          📋 Copy Payment URL
+                        </button>
+                      </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Debug Information - Remove in production */}
+              {debugInfo && import.meta.env.NODE_ENV === 'development' && (
+                <div className="card mb-4" style={{ background: '#f8f9fa', border: '1px solid #dee2e6' }}>
+                  <div className="card-body">
+                    <h6>🐛 Debug Information (Development Only)</h6>
+                    <pre className="mb-0" style={{ fontSize: '0.8rem', maxHeight: '200px', overflow: 'auto' }}>
+                      {JSON.stringify(debugInfo, null, 2)}
+                    </pre>
                   </div>
                 </div>
               )}
@@ -292,7 +341,7 @@ const PaymentForm = () => {
                       </>
                     ) : (
                       <>
-                        Generate Payment Link
+                        💳 Generate Payment Link
                       </>
                     )}
                   </button>
@@ -301,7 +350,7 @@ const PaymentForm = () => {
 
               <div className="mt-4 p-3" style={{ background: 'var(--light-blue)', borderRadius: '8px' }}>
                 <h6 style={{ color: 'var(--dark-blue)' }}>
-                  Payment Information
+                  ℹ️ Payment Information
                 </h6>
                 <ul className="mb-0" style={{ fontSize: '0.9rem' }}>
                   <li>This is a test environment - do not use real payment methods</li>
