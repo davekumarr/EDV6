@@ -18,12 +18,16 @@ const Dashboard = () => {
     total: 0,
     success: 0,
     pending: 0,
-    failed: 0
+    failed: 0,
+    totalAmount: 0,
+    successAmount: 0
   });
+  const [chartData, setChartData] = useState([]);
+  const [realTimeEnabled, setRealTimeEnabled] = useState(false);
 
-const fetchTransactions = useCallback(async () => {
-  try {
-    setLoading(true);
+  const fetchTransactions = useCallback(async () => {
+    try {
+      setLoading(true);
       const params = new URLSearchParams();
       Object.keys(filters).forEach(key => {
         if (filters[key]) params.append(key, filters[key]);
@@ -33,34 +37,98 @@ const fetchTransactions = useCallback(async () => {
       setTransactions(response.data.data);
       setPagination(response.data.pagination);
       
-      // Calculate stats
+      // Calculate comprehensive stats
       const stats = response.data.data.reduce((acc, transaction) => {
         acc.total++;
-        if (transaction.status === 'success') acc.success++;
-        else if (transaction.status === 'pending') acc.pending++;
-        else if (transaction.status === 'failed') acc.failed++;
+        const amount = transaction.order_amount || 0;
+        acc.totalAmount += amount;
+        
+        if (transaction.status === 'success') {
+          acc.success++;
+          acc.successAmount += amount;
+        } else if (transaction.status === 'pending') {
+          acc.pending++;
+        } else if (transaction.status === 'failed') {
+          acc.failed++;
+        }
         return acc;
-      }, { total: 0, success: 0, pending: 0, failed: 0 });
+      }, { total: 0, success: 0, pending: 0, failed: 0, totalAmount: 0, successAmount: 0 });
       
-setStats(stats);
-    setError('');
-  } catch (err) {
-    setError('Failed to fetch transactions');
-    console.error(err);
-  } finally {
-    setLoading(false);
-  }
-}, [filters]);
+      setStats(stats);
+      
+      // Prepare chart data for last 7 days
+      const chartData = prepareChartData(response.data.data);
+      setChartData(chartData);
+      
+      setError('');
+    } catch (err) {
+      setError('Failed to fetch transactions');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
 
-useEffect(() => {
-  fetchTransactions();
-}, [fetchTransactions]);
+  const prepareChartData = (transactions) => {
+    const last7Days = [];
+    const today = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+      
+      last7Days.push({
+        date: dateStr,
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        success: 0,
+        pending: 0,
+        failed: 0,
+        total: 0,
+        amount: 0
+      });
+    }
+    
+    transactions.forEach(transaction => {
+      const transactionDate = new Date(transaction.createdAt).toISOString().split('T')[0];
+      const dayData = last7Days.find(day => day.date === transactionDate);
+      
+      if (dayData) {
+        dayData.total++;
+        dayData.amount += transaction.order_amount || 0;
+        
+        if (transaction.status === 'success') dayData.success++;
+        else if (transaction.status === 'pending') dayData.pending++;
+        else if (transaction.status === 'failed') dayData.failed++;
+      }
+    });
+    
+    return last7Days;
+  };
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  // Real-time data polling
+  useEffect(() => {
+    let interval;
+    if (realTimeEnabled) {
+      interval = setInterval(() => {
+        fetchTransactions();
+      }, 10000); // Poll every 10 seconds
+    }
+    
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [realTimeEnabled, fetchTransactions]);
 
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
       ...prev,
       [key]: value,
-      page: 1 // Reset to first page when filtering
+      page: 1
     }));
   };
 
@@ -90,6 +158,54 @@ useEffect(() => {
       failed: 'badge-danger'
     };
     return statusMap[status?.toLowerCase()] || 'badge-secondary';
+  };
+
+  const renderChart = () => {
+    
+    const maxTransactions = Math.max(...chartData.map(d => d.total));
+    
+    return (
+      <div className="chart-container">
+        <h6>Last 7 Days Overview</h6>
+        <div className="bar-chart">
+          {chartData.map((day, index) => (
+            <div key={index} className="bar-item">
+              <div className="bar-stack">
+                <div 
+                  className="bar-segment success"
+                  style={{ 
+                    height: `${(day.success / maxTransactions) * 100}%`,
+                    backgroundColor: 'var(--primary-green)'
+                  }}
+                  title={`${day.success} successful`}
+                />
+                <div 
+                  className="bar-segment pending"
+                  style={{ 
+                    height: `${(day.pending / maxTransactions) * 100}%`,
+                    backgroundColor: '#f59e0b'
+                  }}
+                  title={`${day.pending} pending`}
+                />
+                <div 
+                  className="bar-segment failed"
+                  style={{ 
+                    height: `${(day.failed / maxTransactions) * 100}%`,
+                    backgroundColor: '#dc2626'
+                  }}
+                  title={`${day.failed} failed`}
+                />
+              </div>
+              <div className="bar-label">
+                <small>{day.day}</small>
+                <br />
+                <small>{day.total}</small>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const renderPagination = () => {
@@ -179,32 +295,80 @@ useEffect(() => {
 
   return (
     <div className="container-fluid">
-      <h1 className="page-title">Transaction Dashboard</h1>
+      <div className="d-flex justify-content-between align-items-center mb-4">
+        <h1 className="page-title">Transaction Dashboard</h1>
+        <div className="d-flex align-items-center gap-3">
+          <div className="form-check form-switch">
+            <input
+              className="form-check-input"
+              type="checkbox"
+              id="realTimeToggle"
+              checked={realTimeEnabled}
+              onChange={(e) => setRealTimeEnabled(e.target.checked)}
+            />
+            <label className="form-check-label" htmlFor="realTimeToggle">
+              🔄 Real-time Updates
+            </label>
+          </div>
+          {realTimeEnabled && (
+            <span className="badge bg-success pulse-animation">
+              Live
+            </span>
+          )}
+        </div>
+      </div>
       
-      {/* Stats Cards */}
+      {/* Enhanced Stats Cards */}
       <div className="row mb-4">
         <div className="col-md-3">
           <div className="stat-card">
-            <h6>Total Transactions</h6>
-            <h3>{stats.total}</h3>
+            <div className="stat-icon">📊</div>
+            <div>
+              <h6>Total Transactions</h6>
+              <h3>{stats.total}</h3>
+              <small className="text-muted">{formatCurrency(stats.totalAmount)} total</small>
+            </div>
           </div>
         </div>
         <div className="col-md-3">
           <div className="stat-card" style={{ borderLeftColor: 'var(--primary-green)' }}>
-            <h6>Successful</h6>
-            <h3 style={{ color: 'var(--primary-green)' }}>{stats.success}</h3>
+            <div className="stat-icon" style={{ color: 'var(--primary-green)' }}>✅</div>
+            <div>
+              <h6>Successful</h6>
+              <h3 style={{ color: 'var(--primary-green)' }}>{stats.success}</h3>
+              <small className="text-muted">{formatCurrency(stats.successAmount)} collected</small>
+            </div>
           </div>
         </div>
         <div className="col-md-3">
           <div className="stat-card" style={{ borderLeftColor: '#f59e0b' }}>
-            <h6>Pending</h6>
-            <h3 style={{ color: '#f59e0b' }}>{stats.pending}</h3>
+            <div className="stat-icon" style={{ color: '#f59e0b' }}>⏳</div>
+            <div>
+              <h6>Pending</h6>
+              <h3 style={{ color: '#f59e0b' }}>{stats.pending}</h3>
+              <small className="text-muted">Awaiting confirmation</small>
+            </div>
           </div>
         </div>
         <div className="col-md-3">
           <div className="stat-card" style={{ borderLeftColor: '#dc2626' }}>
-            <h6>Failed</h6>
-            <h3 style={{ color: '#dc2626' }}>{stats.failed}</h3>
+            <div className="stat-icon" style={{ color: '#dc2626' }}>❌</div>
+            <div>
+              <h6>Failed</h6>
+              <h3 style={{ color: '#dc2626' }}>{stats.failed}</h3>
+              <small className="text-muted">Need attention</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Chart Visualization */}
+      <div className="row mb-4">
+        <div className="col-12">
+          <div className="card">
+            <div className="card-body">
+              {renderChart()}
+            </div>
           </div>
         </div>
       </div>
@@ -272,7 +436,7 @@ useEffect(() => {
       {/* Transactions Table */}
       <div className="table-container">
         <div className="table-responsive">
-          <table className="table">
+          <table className="table table-hover">
             <thead>
               <tr>
                 <th>Order ID</th>
@@ -294,7 +458,7 @@ useEffect(() => {
                 </tr>
               ) : (
                 transactions.map((transaction) => (
-                  <tr key={transaction.collect_id || transaction._id}>
+                  <tr key={transaction.collect_id || transaction._id} className="transaction-row">
                     <td>
                       <div>
                         <strong>{transaction.custom_order_id || 'N/A'}</strong>

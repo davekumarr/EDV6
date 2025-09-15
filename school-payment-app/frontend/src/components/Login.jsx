@@ -29,14 +29,19 @@ const Login = () => {
         formData
       );
       
+    if (response.data.token) {
       localStorage.setItem('token', response.data.token);
+      // Remove setIsAuthenticated(true); if not defined, or define it if needed
       navigate('/dashboard');
-    } catch (err) {
-      setError(err.response?.data?.error || 'Login failed. Please try again.');
-    } finally {
-      setLoading(false);
+    } else {
+      setError('Login successful but no token received');
     }
-  };
+  } catch (err) {
+    setError(err.response?.data?.error || 'Login failed. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="container">

@@ -9,17 +9,19 @@ exports.handleWebhook = async (req, res) => {
     console.log('Headers:', req.headers);
     console.log('Body:', JSON.stringify(req.body, null, 2));
 
-    // Log the webhook payload
+    // Log the webhook payload first
     const webhookLog = new WebhookLog({
-      payload: req.body
+      payload: req.body,
+      event_time: new Date()
     });
     await webhookLog.save();
+    console.log('Webhook logged successfully');
 
-    // Handle different webhook formats (Edviron and Cashfree)
+    // Handle different webhook formats
     let orderInfo = null;
     let webhookType = 'unknown';
 
-    // Check if it's an Edviron webhook
+    // Check if it's an Edviron webhook (as per your PDF format)
     if (req.body.order_info) {
       webhookType = 'edviron';
       orderInfo = req.body.order_info;
@@ -35,9 +37,9 @@ exports.handleWebhook = async (req, res) => {
           bank_reference: Joi.string().allow(''),
           status: Joi.string().required(),
           payment_mode: Joi.string().required(),
-          payment_details: Joi.string().allow(''),
-          payment_message: Joi.string().allow(''),
-          payment_time: Joi.date().required(),
+          payemnt_details: Joi.string().allow(''), // Note: typo in PDF (payemnt_details)
+          Payment_message: Joi.string().allow(''), // Note: capital P in PDF
+          payment_time: Joi.string().required(),
           error_message: Joi.string().allow('')
         }).required()
       });
@@ -61,14 +63,14 @@ exports.handleWebhook = async (req, res) => {
         bank_reference: req.body.bank_reference || req.body.cf_payment_id || '',
         status: mapCashfreeStatus(req.body.payment_status || req.body.order_status),
         payment_mode: req.body.payment_method || req.body.payment_group || 'online',
-        payment_details: JSON.stringify({
+        payemnt_details: JSON.stringify({
           cf_payment_id: req.body.cf_payment_id,
           payment_method: req.body.payment_method,
           payment_group: req.body.payment_group
         }),
-        payment_message: req.body.payment_message || req.body.failure_reason || '',
-        payment_time: new Date(req.body.payment_time || req.body.txTime || Date.now()),
-        error_message: req.body.failure_reason || req.body.error_details || ''
+        Payment_message: req.body.payment_message || req.body.failure_reason || 'Payment processed',
+        payment_time: new Date(req.body.payment_time || req.body.txTime || Date.now()).toISOString(),
+        error_message: req.body.failure_reason || req.body.error_details || 'NA'
       };
 
       console.log('Mapped Cashfree webhook:', orderInfo);
@@ -84,10 +86,10 @@ exports.handleWebhook = async (req, res) => {
         bank_reference: req.body.reference || req.body.txn_id || '',
         status: normalizeStatus(req.body.status || req.body.payment_status),
         payment_mode: req.body.payment_mode || req.body.method || 'online',
-        payment_details: JSON.stringify(req.body),
-        payment_message: req.body.message || '',
-        payment_time: new Date(req.body.timestamp || req.body.payment_time || Date.now()),
-        error_message: req.body.error || ''
+        payemnt_details: JSON.stringify(req.body),
+        Payment_message: req.body.message || 'Payment processed',
+        payment_time: new Date(req.body.timestamp || req.body.payment_time || Date.now()).toISOString(),
+        error_message: req.body.error || 'NA'
       };
     }
 
@@ -99,12 +101,12 @@ exports.handleWebhook = async (req, res) => {
 
     console.log(`Processing ${webhookType} webhook for order:`, orderInfo.order_id);
 
-    // Find the order by custom_order_id (which is collect_id from payment gateway)
+    // Find the order by custom_order_id
     const order = await Order.findOne({ custom_order_id: orderInfo.order_id });
     
     if (!order) {
       console.error('Order not found for webhook:', orderInfo.order_id);
-      // Still return success to avoid webhook retries for non-existent orders
+      // Return success to avoid webhook retries for non-existent orders
       return res.status(200).json({ 
         success: true, 
         message: 'Webhook received but order not found',
@@ -114,35 +116,37 @@ exports.handleWebhook = async (req, res) => {
 
     console.log('Found order:', order._id);
 
-    // Create or update OrderStatus
+    // Create or update OrderStatus - THIS WAS THE MAIN ISSUE
     const orderStatusData = {
-      collect_id: order._id,
+      collect_id: order._id, // This should be ObjectId, not string
       order_amount: orderInfo.order_amount,
       transaction_amount: orderInfo.transaction_amount,
       payment_mode: orderInfo.payment_mode,
-      payment_details: orderInfo.payment_details || '',
+      payment_details: orderInfo.payemnt_details || '', // Note: typo from PDF
       bank_reference: orderInfo.bank_reference || '',
-      payment_message: orderInfo.payment_message || '',
+      payment_message: orderInfo.Payment_message || '', // Note: capital P from PDF
       status: orderInfo.status,
       error_message: orderInfo.error_message || 'NA',
-      payment_time: orderInfo.payment_time
+      payment_time: new Date(orderInfo.payment_time)
     };
 
-    console.log('Order status data:', orderStatusData);
+    console.log('Order status data to save:', orderStatusData);
 
     // Check if OrderStatus already exists for this order
     let orderStatus = await OrderStatus.findOne({ collect_id: order._id });
     
     if (orderStatus) {
+      console.log('Updating existing OrderStatus:', orderStatus._id);
       // Update existing OrderStatus
       Object.assign(orderStatus, orderStatusData);
       await orderStatus.save();
-      console.log('Updated existing OrderStatus');
+      console.log('Updated existing OrderStatus successfully');
     } else {
+      console.log('Creating new OrderStatus');
       // Create new OrderStatus
       orderStatus = new OrderStatus(orderStatusData);
       await orderStatus.save();
-      console.log('Created new OrderStatus');
+      console.log('Created new OrderStatus successfully:', orderStatus._id);
     }
 
     // Update order status
@@ -152,11 +156,13 @@ exports.handleWebhook = async (req, res) => {
     await order.save();
 
     console.log(`Order status updated from "${previousStatus}" to "${order.status}"`);
+    console.log('=== Webhook Processing Completed Successfully ===');
 
     res.status(200).json({ 
       success: true,
       message: `${webhookType} webhook processed successfully`,
       order_id: order._id,
+      order_status_id: orderStatus._id,
       status: order.status
     });
 
@@ -208,6 +214,7 @@ function normalizeStatus(status) {
   }
 }
 
+// Get webhook logs with pagination
 exports.getWebhookLogs = async (req, res) => {
   try {
     const { page = 1, limit = 50 } = req.query;
@@ -235,5 +242,41 @@ exports.getWebhookLogs = async (req, res) => {
       success: false,
       error: error.message 
     });
+  }
+};
+
+// Test webhook endpoint for development
+exports.simulateWebhook = async (req, res) => {
+  try {
+    const { order_id, status = 'success' } = req.body;
+    
+    if (!order_id) {
+      return res.status(400).json({ error: 'order_id is required' });
+    }
+
+    // Simulate webhook payload
+    const webhookPayload = {
+      status: 200,
+      order_info: {
+        order_id: order_id,
+        order_amount: 2000,
+        transaction_amount: 2000,
+        gateway: "Test Gateway",
+        bank_reference: "TEST" + Date.now(),
+        status: status,
+        payment_mode: "upi",
+        payemnt_details: "test@upi",
+        Payment_message: "Test payment " + status,
+        payment_time: new Date().toISOString(),
+        error_message: status === 'failed' ? 'Test failure' : 'NA'
+      }
+    };
+
+    // Simulate the webhook call
+    req.body = webhookPayload;
+    await exports.handleWebhook(req, res);
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 };
